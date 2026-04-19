@@ -1,0 +1,194 @@
+'use client'
+
+import { startTransition, useEffect, useState } from 'react'
+import { X, AlertTriangle, Shield } from 'lucide-react'
+import { useData } from '@/context/DataContext'
+import { toast } from 'sonner'
+import type { Client } from '@/types'
+
+interface EditClientModalProps {
+  client: Client
+  isOpen: boolean
+  onClose: () => void
+}
+
+export default function EditClientModal({ client, isOpen, onClose }: EditClientModalProps) {
+  const { updateClient } = useData()
+  const [formData, setFormData] = useState(client)
+
+  useEffect(() => {
+    startTransition(() => {
+      setFormData(client)
+    })
+  }, [client])
+
+  if (!isOpen) return null
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    updateClient(client.id, formData)
+    toast.success(`${formData.first_name} ${formData.last_name} a été mis à jour (affichage local)`)
+    onClose()
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    const next =
+      name === 'cin' || name === 'license_number' ? value.toUpperCase() : value
+    setFormData((prev) => ({
+      ...prev,
+      [name]: next,
+    }))
+  }
+
+  const gbs = client.global_blacklist_status
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+
+      <div className="relative z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl mx-4">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 sticky top-0 bg-card">
+          <h2 className="text-lg font-semibold text-card-foreground">Modifier le client</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {gbs?.is_blacklisted && (
+            <div
+              className="flex gap-3 rounded-lg border-2 border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              role="alert"
+            >
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" aria-hidden />
+              <div>
+                <p className="font-semibold flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Client signalé sur la liste noire globale
+                </p>
+                {gbs.reason ? (
+                  <p className="mt-2 text-destructive/95">
+                    <span className="font-medium">Motif :</span> {gbs.reason}
+                  </p>
+                ) : gbs.detail ? (
+                  <p className="mt-2 text-destructive/95">{gbs.detail}</p>
+                ) : null}
+                {gbs.reporting_agency ? (
+                  <p className="mt-1 text-destructive/95">
+                    <span className="font-medium">Organisme :</span> {gbs.reporting_agency}
+                  </p>
+                ) : null}
+                <p className="mt-2 text-xs text-destructive/80">
+                  Données synchronisées depuis le référentiel central.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h3 className="text-sm font-medium text-foreground mb-4">Identité</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Prénom</label>
+                <input
+                  type="text"
+                  name="first_name"
+                  value={formData.first_name}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Nom</label>
+                <input
+                  type="text"
+                  name="last_name"
+                  value={formData.last_name}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">
+                  CIN (Carte d&apos;identité nationale)
+                </label>
+                <input
+                  type="text"
+                  name="cin"
+                  value={formData.cin ?? ''}
+                  onChange={handleChange}
+                  required
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Permis de conduire</label>
+                <input
+                  type="text"
+                  name="license_number"
+                  value={formData.license_number ?? ''}
+                  onChange={handleChange}
+                  required
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium text-foreground mb-4">Contact</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Téléphone</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Enregistrer
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
