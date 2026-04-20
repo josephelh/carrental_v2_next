@@ -1,20 +1,25 @@
 'use client'
 
 import { AlertTriangle, Shield } from 'lucide-react'
-import type { GlobalBlacklistStatus } from '@/types'
+import type { ClientReputation } from '@/types'
 
 interface BookingBlacklistFormAlertProps {
-  status: GlobalBlacklistStatus | null | undefined
+  reputation: ClientReputation | null | undefined
   riskConfirmed: boolean
   onRiskConfirmedChange: (checked: boolean) => void
 }
 
 export default function BookingBlacklistFormAlert({
-  status,
+  reputation,
   riskConfirmed,
   onRiskConfirmedChange,
 }: BookingBlacklistFormAlertProps) {
-  if (!status?.is_blacklisted) return null
+  if (!reputation || (reputation.status !== 'DANGER' && reputation.status !== 'CAUTION')) return null
+
+  const title =
+    reputation.status === 'DANGER'
+      ? 'Client à risque élevé — vérification requise'
+      : 'Client à surveiller — prudence recommandée'
 
   return (
     <div className="space-y-3" role="alert">
@@ -23,18 +28,15 @@ export default function BookingBlacklistFormAlert({
         <div className="min-w-0">
           <p className="font-semibold flex flex-wrap items-center gap-2">
             <Shield className="h-4 w-4 shrink-0" aria-hidden />
-            Client sur la liste noire globale — location à haut risque
+            {title}
           </p>
-          {status.reason ? (
-            <p className="mt-2 opacity-95">
-              <span className="font-medium">Motif :</span> {status.reason}
-            </p>
-          ) : null}
-          {status.reporting_agency ? (
-            <p className="mt-1 opacity-95">
-              <span className="font-medium">Organisme signalant :</span> {status.reporting_agency}
-            </p>
-          ) : null}
+          {reputation.recent_reasons.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5 opacity-95">
+              {reputation.recent_reasons.map((reason, idx) => (
+                <li key={`reason-${idx}`}>{reason}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
@@ -47,7 +49,7 @@ export default function BookingBlacklistFormAlert({
         <span>
           <span className="font-medium text-foreground">Je confirme le risque</span>
           <span className="block text-muted-foreground mt-0.5 text-xs">
-            Cochez cette case pour valider la réservation malgré le signal central.
+            Cochez cette case pour valider la réservation malgré le signal réputation.
           </span>
         </span>
       </label>

@@ -62,7 +62,9 @@ export default function EditBookingModal({ booking, isOpen, onClose }: EditBooki
     () => clients.find((c) => c.id === formData.customer),
     [clients, formData.customer]
   )
-  const blacklisted = Boolean(selectedClient?.global_blacklist_status?.is_blacklisted)
+  const riskyClient =
+    selectedClient?.reputation?.status === 'DANGER' ||
+    selectedClient?.reputation?.status === 'CAUTION'
 
   if (!isOpen) return null
 
@@ -114,7 +116,7 @@ export default function EditBookingModal({ booking, isOpen, onClose }: EditBooki
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <BookingBlacklistFormAlert
-            status={selectedClient?.global_blacklist_status}
+            reputation={selectedClient?.reputation}
             riskConfirmed={riskConfirmed}
             onRiskConfirmedChange={setRiskConfirmed}
           />
@@ -250,7 +252,7 @@ export default function EditBookingModal({ booking, isOpen, onClose }: EditBooki
             </button>
             <button
               type="submit"
-              disabled={blacklisted && !riskConfirmed}
+              disabled={riskyClient && !riskConfirmed}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:pointer-events-none disabled:opacity-50"
             >
               Enregistrer

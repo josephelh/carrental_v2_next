@@ -41,7 +41,9 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
     }))
   }
 
-  const gbs = client.global_blacklist_status
+  const rep = client.reputation
+  const isRisky = rep?.status === 'DANGER' || rep?.status === 'CAUTION'
+  const alertTitle = rep?.status === 'DANGER' ? 'Client à risque élevé' : 'Client à surveiller'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -60,7 +62,7 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {gbs?.is_blacklisted && (
+          {isRisky && (
             <div
               className="flex gap-3 rounded-lg border-2 border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive"
               role="alert"
@@ -69,22 +71,17 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
               <div>
                 <p className="font-semibold flex items-center gap-2">
                   <Shield className="h-4 w-4" />
-                  Client signalé sur la liste noire globale
+                  {alertTitle}
                 </p>
-                {gbs.reason ? (
-                  <p className="mt-2 text-destructive/95">
-                    <span className="font-medium">Motif :</span> {gbs.reason}
-                  </p>
-                ) : gbs.detail ? (
-                  <p className="mt-2 text-destructive/95">{gbs.detail}</p>
-                ) : null}
-                {gbs.reporting_agency ? (
-                  <p className="mt-1 text-destructive/95">
-                    <span className="font-medium">Organisme :</span> {gbs.reporting_agency}
-                  </p>
-                ) : null}
+                {rep && rep.recent_reasons.length > 0 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-destructive/95">
+                    {rep.recent_reasons.map((reason, idx) => (
+                      <li key={`${client.id}-reason-${idx}`}>{reason}</li>
+                    ))}
+                  </ul>
+                )}
                 <p className="mt-2 text-xs text-destructive/80">
-                  Données synchronisées depuis le référentiel central.
+                  Données synchronisées depuis le système de réputation.
                 </p>
               </div>
             </div>

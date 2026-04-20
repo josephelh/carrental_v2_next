@@ -52,13 +52,13 @@ export interface Car {
 /** Payload for POST/PATCH car (omit read-only list fields if not needed on create). */
 export type CarCreateInput = Omit<Car, 'id' | 'marque_nom' | 'modele_nom' | 'created_at' | 'images'>
 
-/** Central blacklist / fraud signal returned with customer (staff view). */
-export interface GlobalBlacklistStatus {
-  is_blacklisted: boolean
-  reason?: string | null
-  reporting_agency?: string | null
-  /** Present when lookup fails or identity missing (Django serializer / central API). */
-  detail?: string | null
+export type ClientReputationStatus = 'TRUSTED' | 'NEUTRAL' | 'CAUTION' | 'DANGER'
+
+export interface ClientReputation {
+    average_rating: number;
+    total_reports: number;
+    status: 'TRUSTED' | 'NEUTRAL' | 'CAUTION' | 'DANGER';
+    recent_reasons: string[];
 }
 
 /** Row from GET /api/blacklist/check_identity/ (local BlacklistEntry). */
@@ -79,7 +79,7 @@ export interface Client {
   cin: string | null
   license_number: string | null
   user: number | null
-  global_blacklist_status: GlobalBlacklistStatus | null
+  reputation: ClientReputation | null
 }
 
 /** POST /admin/customers/ — fields persisted by `CustomerSerializer.create`. */

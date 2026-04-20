@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { isAxiosError } from 'axios'
-import { X, ShieldAlert } from 'lucide-react'
+import { Star, X, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
+import { useData } from '@/context/DataContext'
 import { api } from '@/lib/api'
 import { extractBackendMessage } from '@/lib/djangoDataMappers'
 import type { Client } from '@/types'
@@ -19,7 +20,8 @@ interface ReportClientToGlobalModalProps {
   client: Client | null
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void | Promise<void>
+  /** Optional hook after refetch (e.g. analytics). Data is refreshed via DataContext inside the modal. */
+  onSuccess?: () => void | Promise<void>
 }
 
 export default function ReportClientToGlobalModal({
@@ -28,8 +30,10 @@ export default function ReportClientToGlobalModal({
   onClose,
   onSuccess,
 }: ReportClientToGlobalModalProps) {
+  const { refetchData } = useData()
   const [preset, setPreset] = useState<string>(REASON_PRESETS[0].value)
   const [otherReason, setOtherReason] = useState('')
+  const [rating, setRating] = useState<number>(5)
   const [submitting, setSubmitting] = useState(false)
 
   if (!isOpen || !client) return null
@@ -44,6 +48,7 @@ export default function ReportClientToGlobalModal({
   const handleClose = () => {
     setPreset(REASON_PRESETS[0].value)
     setOtherReason('')
+    setRating(5)
     onClose()
   }
 
@@ -55,11 +60,13 @@ export default function ReportClientToGlobalModal({
     }
     setSubmitting(true)
     try {
-      await api.post(`admin/customers/${client.id}/report_to_global/`, {
+      await api.post(`/admin/customers/${client.id}/report_to_global/`, {
         reason: resolvedReason,
+        rating,
       })
       toast.success('Client signalé avec succès à la base communautaire.')
-      await onSuccess()
+      await refetchData()
+      await onSuccess?.()
       handleClose()
     } catch (err) {
       if (isAxiosError(err)) {
@@ -135,6 +142,26 @@ export default function ReportClientToGlobalModal({
             </div>
           )}
 
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1.5">Rating</label>
+            <div className="flex items-center gap-1 rounded-lg border border-input bg-background px-3 py-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setRating(value)}
+                  aria-label={`Noter ${value} étoile${value > 1 ? 's' : ''}`}
+                  className="rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-amber-500"
+                >
+                  <Star
+                    className={`h-5 w-5 ${value <= rating ? 'fill-amber-400 text-amber-500' : 'fill-transparent'}`}
+                  />
+                </button>
+              ))}
+              <span className="ml-2 text-xs text-muted-foreground">{rating}/5</span>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -146,7 +173,7 @@ export default function ReportClientToGlobalModal({
             </button>
             <button
               type="submit"
-              disabled={submitting || !resolvedReason}
+              disabled={submitting || !resolvedReason || rating < 1 || rating > 5}
               className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:pointer-events-none disabled:opacity-50"
             >
               {submitting ? 'Envoi…' : 'Confirmer le signalement'}

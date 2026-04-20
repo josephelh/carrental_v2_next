@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils'
-import BookingBlacklistFormAlert from '@/components/bookings/BookingBlacklistFormAlert'
 import type { BookingCreateInput, BookingStatus } from '@/types'
 
 interface AddBookingModalProps {
@@ -36,15 +35,30 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
     () => clients.find((c) => c.id === formData.customer),
     [clients, formData.customer]
   )
-  const blacklisted = Boolean(selectedClient?.global_blacklist_status?.is_blacklisted)
+  const reputation = selectedClient?.reputation ?? null
+  const reputationStatus = reputation?.status
+  const showReputationAlert = reputationStatus === 'DANGER' || reputationStatus === 'CAUTION'
+  const scoreText = reputation ? `${reputation.average_rating.toFixed(1)}/5` : '—/5'
+  const reputationAlertConfig =
+    reputationStatus === 'DANGER'
+      ? {
+          title: `⚠️ CLIENT À RISQUE ÉLEVÉ (Score: ${scoreText})`,
+          toneClass: 'border-red-500 bg-red-50 text-red-900 dark:border-red-500/70 dark:bg-red-950/40 dark:text-red-100',
+        }
+      : {
+          title: `⚡ CLIENT À SURVEILLER (Score: ${scoreText})`,
+          toneClass: 'border-amber-500 bg-amber-50 text-amber-900 dark:border-amber-500/70 dark:bg-amber-950/40 dark:text-amber-100',
+        }
 
-  useEffect(() => {
-    if (isOpen) setRiskConfirmed(false)
-  }, [isOpen])
+  const dangerBlocksSubmit = reputationStatus === 'DANGER' && !riskConfirmed
 
   useEffect(() => {
     setRiskConfirmed(false)
   }, [formData.customer])
+
+  useEffect(() => {
+    if (!isOpen) setRiskConfirmed(false)
+  }, [isOpen])
 
   const totalDays = useMemo(() => {
     if (!formData.start_date || !formData.end_date) return 0
@@ -67,6 +81,10 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
       toast.error('Choisissez un véhicule et un client.')
       return
     }
+    if (reputationStatus === 'DANGER' && !riskConfirmed) {
+      toast.error('Cochez « Confirmer le risque » pour enregistrer cette réservation.')
+      return
+    }
     const payload: BookingCreateInput = {
       car: formData.car,
       customer: formData.customer,
@@ -82,6 +100,7 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
     try {
       await addBooking(payload)
       toast.success('Réservation créée')
+      setRiskConfirmed(false)
       setFormData({
         car: '',
         customer: '',
@@ -119,11 +138,39 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <BookingBlacklistFormAlert
-            status={selectedClient?.global_blacklist_status}
-            riskConfirmed={riskConfirmed}
-            onRiskConfirmedChange={setRiskConfirmed}
-          />
+          {showReputationAlert && selectedClient && reputation && (
+            <div
+              role="alert"
+              className={`rounded-lg border px-4 py-3 text-sm ${reputationAlertConfig.toneClass}`}
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold tracking-wide">{reputationAlertConfig.title}</p>
+                  {reputation.recent_reasons.length > 0 ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                      {reputation.recent_reasons.map((reason, idx) => (
+                        <li key={`${selectedClient.id}-reason-${idx}`}>{reason}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs opacity-90">Aucune raison récente communiquée.</p>
+                  )}
+                  {reputationStatus === 'DANGER' && (
+                    <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs font-medium">
+                      <input
+                        type="checkbox"
+                        checked={riskConfirmed}
+                        onChange={(e) => setRiskConfirmed(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-input"
+                      />
+                      <span>Confirmer le risque</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -254,10 +301,10 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
             </button>
             <button
               type="submit"
-              disabled={blacklisted && !riskConfirmed}
+              disabled={dangerBlocksSubmit}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:pointer-events-none disabled:opacity-50"
             >
-              Créer
+              Enregistrer
             </button>
           </div>
         </form>

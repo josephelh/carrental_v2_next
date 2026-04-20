@@ -10,8 +10,8 @@ import type {
   CarStatut,
   CarTransmission,
   Client,
+  ClientReputationStatus,
   ClientCreateInput,
-  GlobalBlacklistStatus,
   MaintenanceRecord,
 } from '@/types'
 
@@ -130,22 +130,34 @@ export function mapApiCar(raw: unknown): Car {
   }
 }
 
-function mapGlobalBlacklistStatus(raw: unknown): GlobalBlacklistStatus {
+const REPUTATION_STATUSES: ClientReputationStatus[] = ['TRUSTED', 'NEUTRAL', 'CAUTION', 'DANGER']
+
+function pickReputationStatus(v: unknown): ClientReputationStatus {
+  const s = String(v ?? 'NEUTRAL').toUpperCase()
+  return REPUTATION_STATUSES.includes(s as ClientReputationStatus)
+    ? (s as ClientReputationStatus)
+    : 'NEUTRAL'
+}
+
+function mapClientReputation(raw: unknown): Client['reputation'] {
   const r = asRecord(raw ?? {})
-  const reason = r.reason ?? r.detail
-  const agency = r.reporting_agency ?? r.reportingAgency
-  const detail = r.detail
+  const reasonsRaw = r.recent_reasons ?? r.recentReasons
+  const recent_reasons = Array.isArray(reasonsRaw)
+    ? reasonsRaw
+        .map((reason) => (reason === null || reason === undefined ? '' : String(reason).trim()))
+        .filter(Boolean)
+    : []
+
   return {
-    is_blacklisted: Boolean(r.is_blacklisted ?? r.isBlacklisted),
-    reason: reason === undefined || reason === null ? null : String(reason),
-    reporting_agency: agency === undefined || agency === null ? null : String(agency),
-    detail: detail === undefined || detail === null ? null : String(detail),
+    average_rating: num(r, 'average_rating', 'averageRating'),
+    total_reports: num(r, 'total_reports', 'totalReports'),
+    status: pickReputationStatus(r.status),
+    recent_reasons,
   }
 }
 
 export function mapApiClient(raw: unknown): Client {
   const r = asRecord(raw)
-  const gbsRaw = r.global_blacklist_status ?? r.globalBlacklistStatus
   const userVal = r.user
   let user: number | null = null
   if (typeof userVal === 'number') user = userVal
@@ -153,9 +165,7 @@ export function mapApiClient(raw: unknown): Client {
     const n = Number(userVal)
     if (!Number.isNaN(n)) user = n
   }
-
-  const global_blacklist_status =
-    gbsRaw !== undefined && gbsRaw !== null ? mapGlobalBlacklistStatus(gbsRaw) : null
+  const reputation = mapClientReputation(r.reputation)
 
   const cinVal = r.cin
   const licVal = r.license_number ?? r.licenseNumber
@@ -169,7 +179,7 @@ export function mapApiClient(raw: unknown): Client {
     cin: cinVal === null || cinVal === undefined ? null : String(cinVal),
     license_number: licVal === null || licVal === undefined ? null : String(licVal),
     user,
-    global_blacklist_status,
+    reputation,
   }
 }
 

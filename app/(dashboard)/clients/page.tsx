@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Plus, Search, MoreVertical, Edit, Trash2, Mail, Phone, ShieldAlert } from 'lucide-react'
+import { Plus, Search, MoreVertical, Edit, Trash2, Mail, Phone, ShieldAlert, Star } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import AddClientModal from '@/components/clients/AddClientModal'
 import EditClientModal from '@/components/clients/EditClientModal'
@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import type { Client } from '@/types'
 
 export default function ClientsPage() {
-  const { clients, deleteClient, bookings, refetchData } = useData()
+  const { clients, deleteClient, bookings } = useData()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [reportingClient, setReportingClient] = useState<Client | null>(null)
@@ -41,6 +41,12 @@ export default function ClientsPage() {
     deleteClient(id)
     toast.success(`${name} a été supprimé (affichage local)`)
     setOpenDropdown(null)
+  }
+
+  const ratingTextClass = (rating: number) => {
+    if (rating >= 4) return 'text-emerald-600 dark:text-emerald-400'
+    if (rating >= 2.5) return 'text-amber-600 dark:text-amber-400'
+    return 'text-red-600 dark:text-red-400'
   }
 
   return (
@@ -91,6 +97,9 @@ export default function ClientsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Réservations
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Rating
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Actions
                 </th>
@@ -100,6 +109,7 @@ export default function ClientsPage() {
               {filteredClients.map((client) => {
                 const initials = `${client.first_name[0] ?? ''}${client.last_name[0] ?? ''}`
                 const nBook = bookingCountByCustomer.get(client.id) ?? 0
+                const rep = client.reputation
                 return (
                   <tr key={client.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -111,9 +121,6 @@ export default function ClientsPage() {
                           <p className="font-medium text-card-foreground">
                             {client.first_name} {client.last_name}
                           </p>
-                          {client.global_blacklist_status?.is_blacklisted && (
-                            <span className="text-xs text-destructive font-medium">Liste noire</span>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -139,6 +146,20 @@ export default function ClientsPage() {
                       <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-medium text-primary">
                         {nBook}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {!rep || rep.status === 'NEUTRAL' ? (
+                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                          Nouveau
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 text-sm font-semibold ${ratingTextClass(rep.average_rating)}`}
+                        >
+                          <Star className="h-3.5 w-3.5 fill-current" />
+                          {rep.average_rating.toFixed(1)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="relative">
@@ -221,7 +242,6 @@ export default function ClientsPage() {
         client={reportingClient}
         isOpen={!!reportingClient}
         onClose={() => setReportingClient(null)}
-        onSuccess={() => refetchData()}
       />
     </div>
   )

@@ -29,7 +29,8 @@ export default function ViewBookingModal({ booking, isOpen, onClose }: ViewBooki
 
   if (!isOpen) return null
 
-  const gbs = client?.global_blacklist_status
+  const reputation = client?.reputation
+  const isRisky = reputation?.status === 'DANGER' || reputation?.status === 'CAUTION'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -61,31 +62,28 @@ export default function ViewBookingModal({ booking, isOpen, onClose }: ViewBooki
             {booking.status}
           </span>
 
-          {gbs?.is_blacklisted && (
+          {isRisky && (
             <div
               className="flex gap-3 rounded-lg border-2 border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive"
               role="alert"
             >
               <AlertTriangle className="h-5 w-5 shrink-0" />
               <div>
-                <p className="font-semibold">Client sur liste noire globale</p>
-                {gbs.reason ? (
-                  <p className="mt-2 text-destructive/95">
-                    <span className="font-medium">Motif :</span> {gbs.reason}
-                  </p>
-                ) : gbs.detail ? (
-                  <p className="mt-2 text-destructive/95">{gbs.detail}</p>
+                <p className="font-semibold">
+                  {reputation?.status === 'DANGER' ? 'Client à risque élevé' : 'Client à surveiller'}
+                </p>
+                {reputation?.recent_reasons && reputation.recent_reasons.length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-destructive/95">
+                    {reputation.recent_reasons.map((reason, idx) => (
+                      <li key={`${client?.id ?? 'client'}-reason-${idx}`}>{reason}</li>
+                    ))}
+                  </ul>
                 ) : (
                   <p className="mt-1 text-destructive/90">
-                    Ce client est signalé dans le référentiel central. Vérifiez les procédures internes avant de
+                    Ce client est signalé dans le système de réputation. Vérifiez les procédures internes avant de
                     poursuivre.
                   </p>
                 )}
-                {gbs.reporting_agency ? (
-                  <p className="mt-1 text-destructive/95">
-                    <span className="font-medium">Organisme signaleur :</span> {gbs.reporting_agency}
-                  </p>
-                ) : null}
               </div>
             </div>
           )}
