@@ -1,31 +1,30 @@
+// components/ProtectedRoute.tsx
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 
-export default function ProtectedRoute({ children }: { children: ReactNode }) {
+export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
-  const { isLoading, isAuthenticated } = useAuth()
 
   useEffect(() => {
-    if (isLoading) return
-    if (!isAuthenticated) {
+    if (!isLoading && !isAuthenticated) {
       router.replace('/login')
     }
   }, [isLoading, isAuthenticated, router])
 
+  // While checking, show a full-page loader or nothing to prevent content flash
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground text-sm">
-        Chargement…
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
       </div>
     )
   }
 
-  if (!isAuthenticated) {
-    return null
-  }
+  if (!isAuthenticated) return null
 
   return <>{children}</>
 }

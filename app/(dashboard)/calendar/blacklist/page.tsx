@@ -29,29 +29,55 @@ export default function BlacklistVerificationPage() {
     e.preventDefault()
     const raw = input.trim().toUpperCase()
     setErrorMsg(null)
+    setHits(null)
+    
     if (!raw) {
       setErrorMsg('Saisissez un CIN ou un numéro de permis.')
-      setHits(null)
       return
     }
+  
     setLoading(true)
-    setHits(null)
+  
     try {
       const param = identityType === 'cin' ? 'cin' : 'license_number'
-      const { data } = await api.get<BlacklistLocalHit[]>(
-        `blacklist/check_identity/?${param}=${encodeURIComponent(raw)}`
-      )
-      setHits(Array.isArray(data) ? data : [])
-    } catch (err) {
-      if (isAxiosError(err)) {
-        setErrorMsg(extractBackendMessage(err.response?.data) || 'La vérification a échoué.')
-      } else {
-        setErrorMsg('La vérification a échoué.')
+      
+      // 1. Run Local Check and Global Check in parallel for speed
+      const [localRes, globalRes] = await Promise.allSettled([
+        api.get<BlacklistLocalHit[]>(`blacklist/check_identity/?${param}=${encodeURIComponent(raw)}`),
+        api.get(`blacklist/check_global/?identity=${encodeURIComponent(raw)}`) // We will add this bridge to backend
+      ]);
+  
+      let combinedHits: any[] = [];
+  
+      // Process Local Results
+      if (localRes.status === 'fulfilled') {
+        combinedHits = [...localRes.value.data.map(h => ({ ...h, type: 'LOCAL' }))];
       }
+  
+      // Process Global Results (Normalized to match local UI structure)
+      if (globalRes.status === 'fulfilled' && globalRes.value.data.total_reports > 0) {
+        const gData = globalRes.value.data;
+        combinedHits.push({
+          id: 'global-rep',
+          type: 'GLOBAL',
+          reason: `Signalement Global: ${gData.total_reports} rapports. Note: ${gData.average_rating}/5`,
+          created_at: new Date().toISOString(),
+          details: gData.recent_reasons
+        });
+      }
+  
+      setHits(combinedHits);
+  
+    } catch (err) {
+      setErrorMsg('La vérification a échoué. Vérifiez votre connexion au serveur Central.');
     } finally {
       setLoading(false)
     }
   }
+
+
+
+
 
   const clean = hits !== null && hits.length === 0
   const flagged = hits !== null && hits.length > 0

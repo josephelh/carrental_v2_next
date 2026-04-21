@@ -5,6 +5,7 @@ export interface AuthUser {
   email?: string
   first_name?: string
   last_name?: string
+  role: 'ADMIN' | 'AGENT'
 }
 
 /** Fleet.Car choices (values as stored in DB). */

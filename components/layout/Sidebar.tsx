@@ -30,7 +30,7 @@ const navigation = [
 ]
 
 const secondaryNavigation = [
-  { name: 'Parametres', href: '#', icon: Settings },
+  { name: 'Parametres', href: '/settings', icon: Settings },
   { name: 'Aide', href: '#', icon: HelpCircle },
 ]
 

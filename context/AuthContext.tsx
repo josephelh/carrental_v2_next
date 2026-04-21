@@ -2,78 +2,26 @@
 
 import {
   createContext,
-  startTransition,
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  api,
-  clearStoredTokens,
-  refreshAccessToken,
-  setOnAuthFailure,
-  STORAGE_KEYS,
-} from '@/lib/api'
+import { api, STORAGE_KEYS } from '@/lib/api'
 import type { AuthUser } from '@/types'
 
-/** Adjust to match your Django routes and JSON field names. */
-const AUTH_PATHS = {
-  login: 'auth/login/',
-  me: 'auth/me/',
-} as const
-
-function persistTokens(access: string, refresh: string) {
-  localStorage.setItem(STORAGE_KEYS.access, access)
-  localStorage.setItem(STORAGE_KEYS.refresh, refresh)
-}
-
-function persistUser(u: AuthUser) {
-  localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(u))
-}
-
-function readStoredUser(): AuthUser | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.user)
-    if (!raw) return null
-    return normalizeUser(JSON.parse(raw))
-  } catch {
-    return null
-  }
-}
-
-function readTokens() {
+function normalizeUser(raw: any): AuthUser {
+  const o = raw || {}
   return {
-    access: localStorage.getItem(STORAGE_KEYS.access),
-    refresh: localStorage.getItem(STORAGE_KEYS.refresh),
-  }
-}
-
-function extractTokensFromLogin(data: Record<string, unknown>) {
-  const access =
-    (typeof data.access === 'string' && data.access) ||
-    (typeof data.access_token === 'string' && data.access_token) ||
-    ''
-  const refresh =
-    (typeof data.refresh === 'string' && data.refresh) ||
-    (typeof data.refresh_token === 'string' && data.refresh_token) ||
-    ''
-  return { access, refresh }
-}
-
-function normalizeUser(raw: unknown): AuthUser {
-  const o = raw as Record<string, unknown>
-  return {
-    id: (o.id as string | number) ?? '',
+    id: o.id ?? '',
     username: String(o.username ?? ''),
     email: typeof o.email === 'string' ? o.email : undefined,
     first_name: typeof o.first_name === 'string' ? o.first_name : undefined,
     last_name: typeof o.last_name === 'string' ? o.last_name : undefined,
+    role: o.role as 'ADMIN' | 'AGENT' || 'AGENT',
   }
 }
 
@@ -83,7 +31,6 @@ type AuthContextValue = {
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
-  checkAuth: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -94,108 +41,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const logout = useCallback(() => {
-    clearStoredTokens()
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEYS.access)
+      localStorage.removeItem(STORAGE_KEYS.refresh)
+      localStorage.removeItem(STORAGE_KEYS.user)
+    }
     setUser(null)
+    setIsLoading(false)
     router.replace('/login')
   }, [router])
 
+  // Hydration logic
   useEffect(() => {
-    setOnAuthFailure(() => logout)
-    return () => setOnAuthFailure(null)
-  }, [logout])
+    const hydrate = () => {
+      const access = localStorage.getItem(STORAGE_KEYS.access)
+      const storedUser = localStorage.getItem(STORAGE_KEYS.user)
 
-  useLayoutEffect(() => {
-    const stored = readStoredUser()
-    if (stored) setUser(stored)
-  }, [])
-
-  const fetchProfile = useCallback(async () => {
-    const { data } = await api.get(AUTH_PATHS.me)
-    const u = normalizeUser(data)
-    setUser(u)
-    persistUser(u)
-    return u
-  }, [])
-
-  const checkAuth = useCallback(async () => {
-    if (typeof window === 'undefined') {
-      setIsLoading(false)
-      return
-    }
-
-    const { access, refresh } = readTokens()
-
-    if (!access && !refresh) {
-      clearStoredTokens()
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      if (!access && refresh) {
-        await refreshAccessToken()
+      if (access && storedUser) {
+        try {
+          setUser(normalizeUser(JSON.parse(storedUser)))
+        } catch (e) {
+          console.error("Auth hydration error", e)
+          logout()
+        }
       }
-      await fetchProfile()
-    } catch {
-      clearStoredTokens()
-      setUser(null)
-    } finally {
       setIsLoading(false)
     }
-  }, [fetchProfile])
 
-  useEffect(() => {
-    startTransition(() => {
-      void checkAuth()
-    })
-  }, [checkAuth])
+    hydrate()
+
+    // Listen for the 'auth-failure' signal from lib/api.ts
+    const handleAuthFailure = () => logout()
+    window.addEventListener('auth-failure', handleAuthFailure)
+    return () => window.removeEventListener('auth-failure', handleAuthFailure)
+  }, [logout])
 
   const login = useCallback(
     async (username: string, password: string) => {
-      const { data } = await api.post<Record<string, unknown>>(
-        AUTH_PATHS.login,
-        { username, password }
-      )
+      setIsLoading(true)
+      try {
+        const { data } = await api.post('auth/login/', { username, password })
 
-      const { access, refresh } = extractTokensFromLogin(data)
-      if (!access || !refresh) {
-        throw new Error('Réponse de connexion invalide: jetons manquants.')
-      }
-      persistTokens(access, refresh)
+        const access = data.access || data.access_token
+        const refresh = data.refresh || data.refresh_token
 
-      const embeddedUser = data.user ?? data.profile
-      if (embeddedUser && typeof embeddedUser === 'object') {
-        const nextUser = normalizeUser(embeddedUser)
-        setUser(nextUser)
-        persistUser(nextUser)
-      } else {
-        await fetchProfile()
+        if (!access || !refresh) throw new Error('Login failed: Tokens missing.')
+
+        localStorage.setItem(STORAGE_KEYS.access, access)
+        localStorage.setItem(STORAGE_KEYS.refresh, refresh)
+
+        const userData = normalizeUser(data.user || data)
+        setUser(userData)
+        localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(userData))
+
+        setIsLoading(false)
+        router.replace('/')
+      } catch (error) {
+        setIsLoading(false)
+        throw error
       }
-      router.replace('/')
     },
-    [fetchProfile, router]
+    [router]
   )
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      isLoading,
-      isAuthenticated: !!user,
-      login,
-      logout,
-      checkAuth,
-    }),
-    [user, isLoading, login, logout, checkAuth]
-  )
+  const value = useMemo(() => ({
+    user,
+    isLoading,
+    isAuthenticated: !!user,
+    login,
+    logout,
+  }), [user, isLoading, login, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext)
-  if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }

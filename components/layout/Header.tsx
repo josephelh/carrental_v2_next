@@ -3,7 +3,9 @@
 import { Menu, Bell, Search, Sun, Moon } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useTheme } from '@/context/ThemeContext'
-
+import { useAuth } from '@/context/AuthContext'
+import Link from 'next/link'
+  
 interface HeaderProps {
   onMenuClick: () => void
 }
@@ -24,6 +26,7 @@ function resolveTitle(pathname: string): string {
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
+  const { user } = useAuth()
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const title = resolveTitle(pathname)
@@ -64,9 +67,17 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-sm font-medium text-primary-foreground">JD</span>
-          </div>
+        <Link href="/settings" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+  <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center">
+    <span className="text-sm font-medium text-primary-foreground uppercase">
+      {user?.first_name?.[0] || 'U'}{user?.last_name?.[0] || ''}
+    </span>
+  </div>
+  <div className="hidden sm:block text-left">
+    <p className="text-sm font-medium leading-none">{user?.first_name} {user?.last_name}</p>
+    <p className="text-xs text-muted-foreground mt-1">{user?.role}</p>
+  </div>
+</Link>
         </div>
       </div>
     </header>
