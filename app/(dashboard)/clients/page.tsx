@@ -149,16 +149,20 @@ export default function ClientsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {!rep || rep.status === 'NEUTRAL' ? (
-                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                          Nouveau
-                        </span>
+                        <span className="text-muted-foreground text-xs italic">Vierge</span>
                       ) : (
-                        <span
-                          className={`inline-flex items-center gap-1 text-sm font-semibold ${ratingTextClass(rep.average_rating)}`}
-                        >
-                          <Star className="h-3.5 w-3.5 fill-current" />
-                          {rep.average_rating.toFixed(1)}
-                        </span>
+                        <div className="group relative cursor-help">
+                          <span className={`inline-flex items-center gap-1 text-sm font-semibold ${ratingTextClass(rep.average_rating)}`}>
+                            <Star className="h-3.5 w-3.5 fill-current" />
+                            {rep.average_rating.toFixed(1)}
+                          </span>
+
+                          {/* Mini Tooltip showing reasons on hover */}
+                          <div className="invisible group-hover:visible absolute bottom-full left-0 mb-2 w-64 p-2 bg-popover border border-border rounded shadow-xl z-50 text-[10px]">
+                            <p className="font-bold border-b border-border pb-1 mb-1">Motifs récents :</p>
+                            {rep.recent_reasons.map((r, i) => <p key={i} className="py-0.5">• {r}</p>)}
+                          </div>
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
