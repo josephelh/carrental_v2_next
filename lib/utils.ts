@@ -19,3 +19,12 @@ export function formatDate(date: string): string {
     day: 'numeric',
   })
 }
+
+/** Normalize phone for wa.me links: no +, Moroccan 06/07 → 212… */
+export function formatPhoneForWhatsApp(phone: string): string {
+  let s = phone.replace(/[\s-]/g, '').replace(/^\+/, '')
+  if (s.startsWith('06') || s.startsWith('07')) {
+    s = `212${s.slice(1)}`
+  }
+  return s
+}

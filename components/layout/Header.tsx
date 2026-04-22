@@ -22,6 +22,9 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith('/fleet/') && pathname !== '/fleet') {
     return 'Détail véhicule'
   }
+  if (pathname.startsWith('/clients/') && pathname !== '/clients') {
+    return 'Fiche client'
+  }
   return pageTitles[pathname] ?? 'Tableau de bord'
 }
 

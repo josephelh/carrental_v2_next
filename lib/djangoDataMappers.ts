@@ -10,6 +10,8 @@ import type {
   CarStatut,
   CarTransmission,
   Client,
+  ClientStats,
+  CustomerType,
   ClientReputationStatus,
   ClientCreateInput,
   MaintenanceRecord,
@@ -130,6 +132,13 @@ export function mapApiCar(raw: unknown): Car {
   }
 }
 
+const CUSTOMER_TYPES: CustomerType[] = ['INDIVIDUAL', 'BUSINESS']
+
+function pickCustomerType(v: unknown): CustomerType {
+  const s = String(v ?? 'INDIVIDUAL').toUpperCase()
+  return CUSTOMER_TYPES.includes(s as CustomerType) ? (s as CustomerType) : 'INDIVIDUAL'
+}
+
 const REPUTATION_STATUSES: ClientReputationStatus[] = ['TRUSTED', 'NEUTRAL', 'CAUTION', 'DANGER']
 
 function pickReputationStatus(v: unknown): ClientReputationStatus {
@@ -156,6 +165,18 @@ function mapClientReputation(raw: unknown): Client['reputation'] {
   }
 }
 
+function mapClientStats(raw: unknown): ClientStats | undefined {
+  if (raw === null || raw === undefined) return undefined
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const s = asRecord(raw)
+  const lastVisit = nullableStr(s, 'last_visit', 'lastVisit')
+  return {
+    total_revenue: num(s, 'total_revenue', 'totalRevenue'),
+    booking_count: num(s, 'booking_count', 'bookingCount', 'total_bookings', 'totalBookings'),
+    ...(lastVisit ? { last_visit: lastVisit } : {}),
+  }
+}
+
 export function mapApiClient(raw: unknown): Client {
   const r = asRecord(raw)
   const userVal = r.user
@@ -166,6 +187,7 @@ export function mapApiClient(raw: unknown): Client {
     if (!Number.isNaN(n)) user = n
   }
   const reputation = mapClientReputation(r.reputation)
+  const stats = mapClientStats(r.stats)
 
   const cinVal = r.cin
   const licVal = r.license_number ?? r.licenseNumber
@@ -178,8 +200,18 @@ export function mapApiClient(raw: unknown): Client {
     phone: str(r, 'phone'),
     cin: cinVal === null || cinVal === undefined ? null : String(cinVal),
     license_number: licVal === null || licVal === undefined ? null : String(licVal),
+    customer_type: pickCustomerType(r.customer_type ?? r.customerType),
+    business_name: nullableStr(r, 'business_name', 'businessName'),
+    ice: nullableStr(r, 'ice'),
+    rc: nullableStr(r, 'rc'),
+    if_number: nullableStr(r, 'if_number', 'ifNumber'),
     user,
     reputation,
+    nationality: nullableStr(r, 'nationality'),
+    address: nullableStr(r, 'address'),
+    notes: nullableStr(r, 'notes'),
+    date_of_birth: nullableStr(r, 'date_of_birth', 'dateOfBirth'),
+    ...(stats !== undefined ? { stats } : {}),
   }
 }
 
@@ -304,14 +336,20 @@ export function serializeCarForPatch(updates: Partial<Car>): Record<string, unkn
 }
 
 export function serializeClientForCreate(input: ClientCreateInput): Record<string, unknown> {
-  return {
+  const body: Record<string, unknown> = {
     first_name: input.first_name,
     last_name: input.last_name,
     email: input.email,
     phone: input.phone,
     cin: input.cin,
     license_number: input.license_number,
+    customer_type: input.customer_type,
+    business_name: input.customer_type === 'BUSINESS' ? input.business_name : '',
+    ice: input.customer_type === 'BUSINESS' ? input.ice : '',
+    rc: input.customer_type === 'BUSINESS' ? input.rc : '',
+    if_number: input.customer_type === 'BUSINESS' ? input.if_number : '',
   }
+  return body
 }
 
 /** Normalize date-only strings to noon UTC ISO for Django DateTimeField. */
@@ -389,4 +427,20 @@ export function extractBackendMessage(data: unknown): string {
     if (typeof v === 'string' && v.trim()) return v
   }
   return ''
+}
+
+/** True when booking POST failed due to date overlap / vehicle unavailable for the range. */
+export function isBookingOverlapResponse(data: unknown): boolean {
+  const r = asRecord(data)
+  const code = String(r.code ?? r.error_code ?? r.error ?? '').toUpperCase()
+  if (code === 'BOOKING_OVERLAP' || code.includes('OVERLAP')) return true
+  const msg = extractBackendMessage(data).toLowerCase()
+  return (
+    msg.includes('overlap') ||
+    msg.includes('chevauche') ||
+    msg.includes('chevauch') ||
+    msg.includes('indisponible') ||
+    msg.includes('unavailable') ||
+    msg.includes('non disponible pour')
+  )
 }

@@ -70,7 +70,10 @@ interface DataContextType {
   addClient: (client: ClientCreateInput) => Promise<void>
   updateClient: (id: string, client: Partial<Client>) => void
   deleteClient: (id: string) => void
-  addBooking: (booking: BookingCreateInput) => Promise<void>
+  addBooking: (
+    booking: BookingCreateInput,
+    options?: { suppressErrorToast?: boolean }
+  ) => Promise<void>
   updateBooking: (id: string, booking: Partial<Booking>) => Promise<void>
   deleteBooking: (id: string) => Promise<void>
   getCarById: (id: string) => Car | undefined
@@ -221,12 +224,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }
 
   const addBooking = useCallback(
-    async (booking: BookingCreateInput) => {
+    async (
+      booking: BookingCreateInput,
+      options?: { suppressErrorToast?: boolean }
+    ) => {
       try {
         await api.post(ENDPOINTS.bookings, serializeBookingForCreate(booking))
         await loadData({ silent: true })
       } catch (e) {
-        toastIfBadRequestOrForbidden(e, 'Impossible de créer la réservation.')
+        if (!options?.suppressErrorToast) {
+          toastIfBadRequestOrForbidden(e, 'Impossible de créer la réservation.')
+        }
         throw e
       }
     },

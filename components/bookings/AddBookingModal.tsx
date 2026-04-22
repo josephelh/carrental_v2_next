@@ -1,9 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { isAxiosError } from 'axios'
 import { AlertTriangle, X } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { toast } from 'sonner'
+import {
+  extractBackendMessage,
+  isBookingOverlapResponse,
+} from '@/lib/djangoDataMappers'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingCreateInput, BookingStatus } from '@/types'
 
@@ -98,7 +103,7 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
       return_location: formData.return_location,
     }
     try {
-      await addBooking(payload)
+      await addBooking(payload, { suppressErrorToast: true })
       toast.success('Réservation créée')
       setRiskConfirmed(false)
       setFormData({
@@ -111,8 +116,24 @@ export default function AddBookingModal({ isOpen, onClose }: AddBookingModalProp
         return_location: 'Agence principale',
       })
       onClose()
-    } catch {
-      /* DataContext */
+    } catch (err) {
+      if (!isAxiosError(err)) {
+        toast.error('Impossible de créer la réservation.')
+        return
+      }
+      const status = err.response?.status
+      const data = err.response?.data
+      if (status === 400) {
+        if (isBookingOverlapResponse(data)) {
+          toast.error('Ce véhicule est indisponible pour ces dates')
+        } else {
+          toast.error(extractBackendMessage(data) || 'Impossible de créer la réservation.')
+        }
+      } else if (status === 403) {
+        toast.error(extractBackendMessage(data) || 'Impossible de créer la réservation.')
+      } else {
+        toast.error('Impossible de créer la réservation.')
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Plus, Search, MoreVertical, Edit, Trash2, Mail, Phone, ShieldAlert, Star } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import AddClientModal from '@/components/clients/AddClientModal'
@@ -118,9 +119,12 @@ export default function ClientsPage() {
                           <span className="text-sm font-medium text-primary">{initials}</span>
                         </div>
                         <div>
-                          <p className="font-medium text-card-foreground">
+                          <Link
+                            href={`/clients/${client.id}`}
+                            className="font-medium text-card-foreground hover:text-primary hover:underline"
+                          >
                             {client.first_name} {client.last_name}
-                          </p>
+                          </Link>
                         </div>
                       </div>
                     </td>

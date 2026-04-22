@@ -4,7 +4,7 @@ import { startTransition, useEffect, useState } from 'react'
 import { X, AlertTriangle, Shield } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { toast } from 'sonner'
-import type { Client } from '@/types'
+import type { Client, CustomerType } from '@/types'
 
 interface EditClientModalProps {
   client: Client
@@ -24,6 +24,21 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
 
   if (!isOpen) return null
 
+  const setCustomerType = (customer_type: CustomerType) => {
+    setFormData((prev) => ({
+      ...prev,
+      customer_type,
+      ...(customer_type === 'INDIVIDUAL'
+        ? {
+            business_name: null,
+            ice: null,
+            rc: null,
+            if_number: null,
+          }
+        : {}),
+    }))
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     updateClient(client.id, formData)
@@ -33,8 +48,8 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    const next =
-      name === 'cin' || name === 'license_number' ? value.toUpperCase() : value
+    const upperFields = ['cin', 'license_number', 'ice', 'rc', 'if_number']
+    const next = upperFields.includes(name) ? value.toUpperCase() : value
     setFormData((prev) => ({
       ...prev,
       [name]: next,
@@ -44,6 +59,7 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
   const rep = client.reputation
   const isRisky = rep?.status === 'DANGER' || rep?.status === 'CAUTION'
   const alertTitle = rep?.status === 'DANGER' ? 'Client à risque élevé' : 'Client à surveiller'
+  const isBusiness = formData.customer_type === 'BUSINESS'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -83,6 +99,90 @@ export default function EditClientModal({ client, isOpen, onClose }: EditClientM
                 <p className="mt-2 text-xs text-destructive/80">
                   Données synchronisées depuis le système de réputation.
                 </p>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h3 className="text-sm font-medium text-foreground mb-3">Type de client</h3>
+            <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/30 p-1 w-fit">
+              <button
+                type="button"
+                onClick={() => setCustomerType('INDIVIDUAL')}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  formData.customer_type === 'INDIVIDUAL'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Particulier
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomerType('BUSINESS')}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  formData.customer_type === 'BUSINESS'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Entreprise
+              </button>
+            </div>
+          </div>
+
+          {isBusiness && (
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-4">Entreprise</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-sm text-muted-foreground mb-1.5">Raison sociale</label>
+                  <input
+                    type="text"
+                    name="business_name"
+                    value={formData.business_name ?? ''}
+                    onChange={handleChange}
+                    required={isBusiness}
+                    autoComplete="organization"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1.5">ICE</label>
+                  <input
+                    type="text"
+                    name="ice"
+                    value={formData.ice ?? ''}
+                    onChange={handleChange}
+                    required={isBusiness}
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1.5">RC</label>
+                  <input
+                    type="text"
+                    name="rc"
+                    value={formData.rc ?? ''}
+                    onChange={handleChange}
+                    required={isBusiness}
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm text-muted-foreground mb-1.5">IF</label>
+                  <input
+                    type="text"
+                    name="if_number"
+                    value={formData.if_number ?? ''}
+                    onChange={handleChange}
+                    required={isBusiness}
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
               </div>
             </div>
           )}

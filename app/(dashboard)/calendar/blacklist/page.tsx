@@ -1,11 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { isAxiosError } from 'axios'
 import { Search, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { api } from '@/lib/api'
-import { extractBackendMessage } from '@/lib/djangoDataMappers'
 import type { BlacklistLocalHit } from '@/types'
+
+type BlacklistHitRow =
+  | (BlacklistLocalHit & { type?: 'LOCAL' })
+  | {
+      id: string
+      type: 'GLOBAL'
+      reason: string
+      created_at: string
+      details?: unknown
+    }
 
 function formatHitDate(iso: string) {
   try {
@@ -19,10 +27,9 @@ function formatHitDate(iso: string) {
 }
 
 export default function BlacklistVerificationPage() {
-  const [identityType, setIdentityType] = useState<'cin' | 'license'>('cin')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [hits, setHits] = useState<BlacklistLocalHit[] | null>(null)
+  const [hits, setHits] = useState<BlacklistHitRow[] | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -30,54 +37,60 @@ export default function BlacklistVerificationPage() {
     const raw = input.trim().toUpperCase()
     setErrorMsg(null)
     setHits(null)
-    
+
     if (!raw) {
       setErrorMsg('Saisissez un CIN ou un numéro de permis.')
       return
     }
-  
+
     setLoading(true)
-  
+
     try {
-      const param = identityType === 'cin' ? 'cin' : 'license_number'
-      
-      // 1. Run Local Check and Global Check in parallel for speed
+      const identityQ = encodeURIComponent(raw)
+
       const [localRes, globalRes] = await Promise.allSettled([
-        api.get<BlacklistLocalHit[]>(`blacklist/check_identity/?${param}=${encodeURIComponent(raw)}`),
-        api.get(`blacklist/check_global/?identity=${encodeURIComponent(raw)}`) // We will add this bridge to backend
-      ]);
-  
-      let combinedHits: any[] = [];
-  
-      // Process Local Results
-      if (localRes.status === 'fulfilled') {
-        combinedHits = [...localRes.value.data.map(h => ({ ...h, type: 'LOCAL' }))];
+        api.get<BlacklistLocalHit[]>(`blacklist/check_identity/?identity=${identityQ}`),
+        api.get(`blacklist/check_global/?identity=${identityQ}`),
+      ])
+
+      let combinedHits: BlacklistHitRow[] = []
+      const localOk = localRes.status === 'fulfilled'
+
+      if (localOk) {
+        combinedHits = [...localRes.value.data.map((h) => ({ ...h, type: 'LOCAL' as const }))]
+      } else {
+        setErrorMsg('La vérification locale a échoué. Vérifiez votre connexion ou réessayez.')
       }
-  
-      // Process Global Results (Normalized to match local UI structure)
-      if (globalRes.status === 'fulfilled' && globalRes.value.data.total_reports > 0) {
-        const gData = globalRes.value.data;
+
+      const globalOk = globalRes.status === 'fulfilled'
+      if (globalOk && globalRes.value.data.total_reports > 0) {
+        const gData = globalRes.value.data
         combinedHits.push({
           id: 'global-rep',
           type: 'GLOBAL',
           reason: `Signalement Global: ${gData.total_reports} rapports. Note: ${gData.average_rating}/5`,
           created_at: new Date().toISOString(),
-          details: gData.recent_reasons
-        });
+          details: gData.recent_reasons,
+        })
+      } else if (!globalOk) {
+        setErrorMsg((prev) =>
+          prev
+            ? `${prev} Vérification globale indisponible.`
+            : 'La vérification globale a échoué. Réessayez plus tard.'
+        )
       }
-  
-      setHits(combinedHits);
-  
-    } catch (err) {
-      setErrorMsg('La vérification a échoué. Vérifiez votre connexion au serveur Central.');
+
+      if (localOk || combinedHits.length > 0) {
+        setHits(combinedHits)
+      } else {
+        setHits(null)
+      }
+    } catch {
+      setErrorMsg('La vérification a échoué. Vérifiez votre connexion au serveur Central.')
     } finally {
       setLoading(false)
     }
   }
-
-
-
-
 
   const clean = hits !== null && hits.length === 0
   const flagged = hits !== null && hits.length > 0
@@ -92,38 +105,13 @@ export default function BlacklistVerificationPage() {
       </div>
 
       <form onSubmit={handleSearch} className="space-y-4">
-        <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/30 p-1 w-fit">
-          <button
-            type="button"
-            onClick={() => setIdentityType('cin')}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              identityType === 'cin'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            CIN
-          </button>
-          <button
-            type="button"
-            onClick={() => setIdentityType('license')}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              identityType === 'license'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Permis
-          </button>
-        </div>
-
         <div className="relative">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value.toUpperCase())}
-            placeholder={identityType === 'cin' ? 'Ex. AB12345' : 'Numéro de permis'}
+            placeholder="CIN ou numéro de permis (ex. AB12345)"
             className="w-full rounded-xl border-2 border-input bg-background py-4 pl-12 pr-4 text-lg font-medium tracking-wide text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             autoComplete="off"
           />
@@ -159,7 +147,7 @@ export default function BlacklistVerificationPage() {
         </div>
       )}
 
-      {flagged && (
+      {flagged && hits && (
         <div className="rounded-xl border-2 border-destructive/50 bg-destructive/5 px-6 py-6 space-y-4">
           <div className="flex items-start gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-destructive/15">
@@ -168,19 +156,21 @@ export default function BlacklistVerificationPage() {
             <div>
               <h2 className="text-lg font-semibold text-destructive">Signal détecté</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {hits.length} entrée{hits.length > 1 ? 's' : ''} correspondante{hits.length > 1 ? 's' : ''} sur la liste
-                locale.
+                {hits.length} entrée{hits.length > 1 ? 's' : ''} correspondante
+                {hits.length > 1 ? 's' : ''} (liste locale ou globale).
               </p>
             </div>
           </div>
           <ul className="space-y-3">
             {hits.map((hit) => (
               <li
-                key={hit.id}
+                key={String(hit.id)}
                 className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground"
               >
                 <p className="font-medium text-foreground">{hit.reason}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Enregistré le {formatHitDate(hit.created_at)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Enregistré le {formatHitDate(hit.created_at)}
+                </p>
               </li>
             ))}
           </ul>

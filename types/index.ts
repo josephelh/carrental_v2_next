@@ -70,6 +70,16 @@ export interface BlacklistLocalHit {
   created_at: string
 }
 
+export type CustomerType = 'INDIVIDUAL' | 'BUSINESS'
+
+/** Optional aggregates from customer detail / analytics API. */
+export interface ClientStats {
+  total_revenue?: number
+  booking_count?: number
+  /** ISO date of last visit / last rental activity when provided by API. */
+  last_visit?: string
+}
+
 /** Customer as returned by `CustomerSerializer` (staff). */
 export interface Client {
   id: string
@@ -79,8 +89,18 @@ export interface Client {
   phone: string
   cin: string | null
   license_number: string | null
+  customer_type: CustomerType
+  business_name: string | null
+  ice: string | null
+  rc: string | null
+  if_number: string | null
   user: number | null
   reputation: ClientReputation | null
+  nationality: string | null
+  address: string | null
+  notes: string | null
+  date_of_birth: string | null
+  stats?: ClientStats
 }
 
 /** POST /admin/customers/ — fields persisted by `CustomerSerializer.create`. */
@@ -91,6 +111,11 @@ export interface ClientCreateInput {
   phone: string
   cin: string
   license_number: string
+  customer_type: CustomerType
+  business_name: string
+  ice: string
+  rc: string
+  if_number: string
 }
 
 export type BookingStatus =
